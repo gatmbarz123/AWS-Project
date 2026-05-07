@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AWS Project Architecture Showcase
 
 This repository is a sanitized architecture showcase copied from three working DevOps repositories into one repo:
@@ -32,3 +33,7 @@ Examples of sanitized values:
 ## Important
 
 Before using this for a real environment, replace all example placeholders with your own accounts, domains, certificates, secrets, remote state backend, and GitHub/AWS credentials.
+=======
+# AWS-Project
+Demo for AWS/ IaC / GitOps Repo
+>>>>>>> 99680b3966473a11a18c4cc38361cf9044d7143d
