@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AWS Project Architecture Showcase
 
 This repository is a sanitized architecture showcase copied from three working DevOps repositories into one repo:
@@ -36,4 +35,3 @@ Before using this for a real environment, replace all example placeholders with 
 =======
 # AWS-Project
 Demo for AWS/ IaC / GitOps Repo
->>>>>>> 99680b3966473a11a18c4cc38361cf9044d7143d
