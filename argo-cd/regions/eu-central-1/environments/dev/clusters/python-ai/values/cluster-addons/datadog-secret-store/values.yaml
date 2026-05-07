@@ -1,0 +1,13 @@
+namespace: datadog
+
+secrets:
+  data:
+    - secretKey: api-key
+      remoteRef:
+        key: "mang/Datadog"
+        property: "key"
+
+
+serviceAccount:
+  name: datadog-secretstore-sa
+  roleArn: arn:aws:iam::123456789012:role/dev-euc1-python-ai-eks-datadog

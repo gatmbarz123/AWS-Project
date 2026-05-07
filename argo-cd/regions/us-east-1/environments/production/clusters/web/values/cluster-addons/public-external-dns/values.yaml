@@ -1,0 +1,9 @@
+domainFilters:
+  - example.com
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/prod-use1-web-eks-public-eks-external-dns
+
+
+txtOwnerId: prod-use1-web-eks-public

@@ -1,0 +1,5 @@
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/stg-euc1-python-ai-eks-aws-load-balancer-controller
+
+clusterName: stg-euc1-python-ai-eks

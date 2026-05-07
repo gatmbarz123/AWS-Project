@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: enabled
+                    operator: NotIn
+                    values:
+                      - "false"
+          - list:
+              elements:
+                - addon: karpenter
+                  chart: karpenter
+                  repo: 'public.ecr.aws/karpenter'
+                  targetRevision: 1.5.0
+                  namespace: karpenter
+  template:
+    metadata:
+      name: "{{.name}}-{{.addon}}"
+    spec:
+      project: default
+      sources:
+      - repoURL: 'https://github.com/gatmbarz123/AWS-Project.git'
+        targetRevision: main
+        ref: values
+
+      - repoURL: '{{.repo}}'
+        chart: '{{.chart}}'
+        targetRevision: '{{.targetRevision}}'
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+            # Load common values for the addon
+            - $values/regions/eu-central-1/environments/staging/cluster-addons/karpenter/values.yaml
+            # Load cluster-specific overrides
+            - $values/regions/eu-central-1/environments/staging/clusters/{{.name}}/values/cluster-addons/karpenter/values.yaml
+      destination:
+        server: "{{.server}}"
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

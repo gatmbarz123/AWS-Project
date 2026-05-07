@@ -1,0 +1,111 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gpu-node-pools
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  ai-gpu: "true"
+                matchExpressions:
+                  - key: enabled
+                    operator: NotIn
+                    values:
+                      - "false"
+          - git:
+              repoURL: 'https://github.com/gatmbarz123/AWS-Project.git'
+              revision: main
+              directories:
+                - path: 'regions/us-east-1/environments/production/clusters/{{.name}}/values/cluster-addons/gpu-node-pools'
+  template:      
+    metadata:
+      name: "{{.name}}-{{.path.basename}}"
+      namespace: argocd
+
+    spec:
+      # The project the application belongs to.
+      project: default
+
+      # Source of the application manifests
+      source:
+        repoURL: 'https://github.com/gatmbarz123/AWS-Project.git'
+        targetRevision: main
+        path: "{{.path.path}}"
+        helm:
+          valueFiles:
+            - /regions/us-east-1/environments/production/clusters/{{.name}}/values/cluster-addons/gpu-node-pools/values.yaml
+            - /regions/us-east-1/environments/production/clusters/{{.name}}/values/cluster-addons/node-pools/values.yaml
+      
+      # Destination cluster and namespace to deploy the application
+      destination:
+        server: "{{.server}}"
+        namespace: "karpenter"
+
+      # Sync policy
+      syncPolicy:
+        automated: # automated sync by default retries failed attempts 5 times with following delays between attempts ( 5s, 10s, 20s, 40s, 80s ); retry controlled using `retry` field.
+          prune: true # Specifies if resources should be pruned during auto-syncing ( false by default ).
+          selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gpu-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  ai-gpu: "true"
+                matchExpressions:
+                  - key: enabled
+                    operator: NotIn
+                    values:
+                      - "false"
+          - list:
+              elements:
+                - addon: nvidia-gpu-plugin
+                  chart: nvidia-device-plugin
+                  repo: https://nvidia.github.io/k8s-device-plugin
+                  targetRevision: "0.17.1"
+                  namespace: nvidia-gpu-plugin
+
+  template:
+    metadata:
+      name: '{{.name}}-{{.addon}}'
+    spec:
+      project: default
+      sources:
+      - repoURL: 'https://github.com/gatmbarz123/AWS-Project.git'
+        targetRevision: main
+        ref: values
+
+      - repoURL: '{{.repo}}'
+        chart: '{{.chart}}'
+        targetRevision: '{{.targetRevision}}'
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+            # Load cluster-specific overrides
+            - $values/regions/us-east-1/environments/production/clusters/{{.name}}/values/cluster-addons/{{.addon}}/values.yaml
+      destination:
+        server: "{{.server}}"
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

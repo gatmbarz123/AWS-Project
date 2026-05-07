@@ -1,0 +1,9 @@
+args:
+  - --kubelet-insecure-tls
+  - /metrics-server
+containerPort: 10250
+resources:
+  requests:
+    cpu: 100m
+    memory: 200Mi
+  limits: {}

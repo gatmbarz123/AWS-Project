@@ -1,0 +1,11 @@
+global:
+  environment: production
+  short_environment: prod
+  region: us-east-1
+  short_region: use1
+  repo: "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+  certificate: "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+  example_private_hostname: prod.use1.example.com
+  example_public_hostname: use1.example.com
+  account: "123456789012"
+

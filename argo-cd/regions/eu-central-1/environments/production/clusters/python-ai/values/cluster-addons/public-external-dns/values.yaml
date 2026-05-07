@@ -1,0 +1,8 @@
+domainFilters:
+  - example.com
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/prod-euc1-python-ai-eks-public-eks-external-dns
+
+txtOwnerId: prod-euc1-python-ai-eks-public

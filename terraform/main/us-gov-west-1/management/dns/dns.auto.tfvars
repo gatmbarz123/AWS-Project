@@ -1,0 +1,1 @@
+public_hosted_zone_name = "example.com"

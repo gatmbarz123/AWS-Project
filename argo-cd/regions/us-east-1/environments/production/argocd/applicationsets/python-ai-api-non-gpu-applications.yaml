@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: python-ai-api-non-gpu-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  python-ai: "true"
+          - git:
+              repoURL: https://github.com/gatmbarz123/AWS-Project.git
+              revision: main
+              files:
+                - path: regions/us-east-1/environments/production/clusters/python-ai/values/apps/python-ai-api-non-gpu/values.yaml
+  template:
+    metadata:
+      name: "{{.path.basename}}"
+      namespace: argocd
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+          targetRevision: main
+          ref: values
+        - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+          targetRevision: main
+          path: "chart"
+          helm:
+            ignoreMissingValueFiles: true
+            valueFiles:
+              - $values/regions/us-east-1/environments/production/clusters/global-values.yaml
+              - $values/regions/us-east-1/environments/production/clusters/python-ai/values/apps/python-ai-api-non-gpu/values.yaml
+      destination:
+        server: "{{.server}}"
+        namespace: "python-ai-api-non-gpu" 
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

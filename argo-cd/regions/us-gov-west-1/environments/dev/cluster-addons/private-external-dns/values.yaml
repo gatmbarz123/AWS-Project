@@ -1,0 +1,30 @@
+domainFilters:
+  - dev.usgw1.example.com
+
+logLevel: warning
+logFormat: json
+
+serviceAccount:
+  create: true
+  name: private-eks-external-dns-sa
+  automountServiceAccountToken: true
+
+deploymentStrategy: 
+  type: RollingUpdate
+
+revisionHistoryLimit: 3
+policy: sync
+provider: aws
+resources:
+  requests:
+    cpu: 10m
+    memory: 20Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+extraArgs:
+  - --aws-zone-type=private
+  - --annotation-filter=alb.ingress.kubernetes.io/scheme=internal
+sources:
+  - ingress

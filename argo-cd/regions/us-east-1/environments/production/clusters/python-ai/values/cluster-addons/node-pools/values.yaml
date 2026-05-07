@@ -1,0 +1,115 @@
+karpenter:
+  iamRole: "karpenter-eks-node-group-20260209103503983100000009"
+
+clusterName: "prod-use1-python-ai-eks"
+clusterVersion: "1.33"
+
+nodePools:
+  - name: worker-nodepool
+    taints:
+      - key: workload-type
+        value: worker
+        effect: NoSchedule
+    labels:
+      workload-type: worker
+    requirements:
+      - key: workload-type
+        operator: In
+        values:
+          - worker
+      - key: karpenter.k8s.aws/instance-category
+        operator: In
+        values: 
+          - m
+      - key: karpenter.k8s.aws/instance-family
+        operator: In
+        values: 
+          - m5zn
+          - m6i
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values: 
+          - xlarge
+          - 2xlarge
+          - 3xlarge
+          - 4xlarge
+          - 6xlarge
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values: 
+          - on-demand
+
+  - name: api-nodepool
+    taints:
+      - key: workload-type
+        value: api
+        effect: NoSchedule
+    labels:
+      workload-type: api
+    requirements:
+      - key: workload-type
+        operator: In
+        values:
+          - api
+      - key: karpenter.k8s.aws/instance-category
+        operator: In
+        values: 
+          - t
+          - c
+          - r
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values: 
+          - medium
+          - large
+          - xlarge
+          - 2xlarge
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values: 
+          - on-demand
+
+  - name: gpu-nodepool
+    taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+      - key: workload-type
+        value: gpu
+        effect: NoSchedule
+    labels:
+      workload-type: gpu
+      nvidia.com/gpu: "true"
+    requirements:
+      - key: workload-type
+        operator: In
+        values:
+          - gpu
+      - key: karpenter.k8s.aws/instance-family
+        operator: In
+        values: 
+          - g4dn
+          - g4ad
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values: 
+          - xlarge
+          - 2xlarge
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values: 
+          - spot
+      - key: "topology.kubernetes.io/zone"
+        operator: In
+        values:
+          - us-east-1a
+          - us-east-1b
+          - us-east-1c
+      - key: "kubernetes.io/arch"
+        operator: In
+        values:
+          - amd64
+      - key: "kubernetes.io/os"
+        operator: In
+        values:
+          - linux

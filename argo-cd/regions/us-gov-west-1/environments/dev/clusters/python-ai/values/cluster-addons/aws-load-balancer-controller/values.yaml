@@ -1,0 +1,5 @@
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws-us-gov:iam::123456789012:role/dev-usgw1-python-ai-eks-aws-load-balancer-controller
+
+clusterName: dev-usgw1-python-ai-eks

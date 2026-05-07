@@ -1,0 +1,11 @@
+global:
+  environment: dev
+  short_environment: dev
+  region: us-gov-west-1
+  short_region: usgw1
+  repo: "123456789012.dkr.ecr.us-gov-west-1.amazonaws.com"
+  certificate: "arn:aws-us-gov:acm:us-gov-west-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+  example_private_hostname: dev.usgw1.example.com
+  example_public_hostname: example-app.example.com
+  account: "123456789012"
+

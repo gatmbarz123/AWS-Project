@@ -1,0 +1,50 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+plan.out
+plan.txt
+output.txt
+crash.log
+crash.*.log
+*.tfvars.local
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Kubernetes / local credentials
+*kubeconfig*
+*.kubeconfig
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.env
+.env*
+!.env.example
+
+# Cloud / secrets artifacts
+credentials
+*credentials*
+*secret*.json
+*secrets*.json
+
+# Tooling / OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Repo-local planning/session files
+.pi/
+.codex/

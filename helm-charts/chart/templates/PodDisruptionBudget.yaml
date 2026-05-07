@@ -1,0 +1,11 @@
+{{- if hasKey .Values "pdb" }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: '{{ .Values.name }}'
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable | default 1 }} # number/percentage of pods that must always be available, even during a disruption.
+  selector:
+    matchLabels:
+      app: '{{ .Values.name }}'
+{{- end }}

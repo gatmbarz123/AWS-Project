@@ -1,0 +1,5 @@
+policy_irsa_path         = "../../../common/policies/irsa"
+policy_iam_path          = "../../../common/policies/iam"
+policy_applications_path = "../../../common/policies/applications"
+private_hosted_zone_name = "stg.euc1.example.com"
+management_account_id    = "123456789012"

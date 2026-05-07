@@ -1,0 +1,112 @@
+name: web-api
+clusterPrefixName: web-eks
+deployment:
+  enabled: true
+  image:
+    name: web
+    tag: 'main_7c321b9'
+  replicas: 1
+  deploymentStrategy: RollingUpdate
+  maxSurge: 25%
+  maxUnavailable: 25%
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    admission.datadoghq.com/enabled: "false"
+    tags.datadoghq.com/service: web-api
+    tags.datadoghq.com/project: web-api
+    tags.datadoghq.com/team: software
+    tags.datadoghq.com/env: prod
+  podAnnotations:
+    ad.datadoghq.com/web-api.logs: '[{"source":"elixir", "service":"web-api", "tags":["env:prod","project:web-api","team:software"]}]'
+
+serviceAccount:
+  create: true
+
+service:
+  enabled: true
+  targetPort: 4000
+
+config:
+  data:
+    ENV_SUFFIX: "production"
+    APP_VERSION: "9.2.0"
+    PHX_HOST: "web-api.prod.euc1.example.com"
+    S3_BUCKET: "prod-euc1-example-projects-api"
+    S3_REGION: "eu-central-1"
+    AWS_MAILER_ENDPOINT: https://email.eu-central-1.amazonaws.com
+    AWS_MAILER_FROM: "user@example.com"
+    NOTIFICATION_ADDRESS: "user@example.com"
+    PYTHON_AI_NODE_ENDPOINT_URL: "https://python-ai-non-gpu.prod.euc1.example.com"
+    PYTHON_GPU_AI_NODE_ENDPOINT_URL: "https://python-ai-gpu.prod.euc1.example.com"
+    PYTHON_AI_API_NODE_ENDPOINT_URL: "https://python-ai-api-non-gpu.prod.euc1.example.com"
+    DEFAULT_PROGRAMMER_ID: "8"
+    DEFAULT_FEEDBACK_USER_EMAIL: "user@example.com"
+    CAM_ANALYTICS_ENABLED: "true"
+    CAM_ANALYTICS_EMAILS: "user@example.com"
+    CAM_ANALYTICS_REPORTING_INTERVAL: "3600000"
+    AIRTABLE_BASE: "example-airtable-base"
+    LMS_HUB_LOG_LEVEL: "debug"
+    SQS_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/example-queue
+
+secrets:
+  storeKind: ClusterSecretStore
+  storeName: applications-cluster-store
+  template:
+    SECRET_KEY_BASE: "{{ .keyBase }}"
+    DATABASE_URL: "ecto://{{ .username }}:{{ .password | urlquery }}@{{ .rdsWriterEndpoint }}/datacore"
+    S3_ACCESS_KEY_ID: "{{ .s3_access_key }}"
+    S3_SECRET_ACCESS_KEY: "{{ .s3_secret }}"
+    AIRTABLE_API_KEY: "{{ .airtable_key }}"
+  data:
+    - secretKey: airtable_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "AIRTABLE_KEY"
+    - secretKey: keyBase
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "SECRET_KEY_BASE"
+    - secretKey: rdsWriterEndpoint
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "RDS_WRITER_ENDPOINT"
+    - secretKey: password
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "password"
+    - secretKey: username
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "username"
+    - secretKey: s3_access_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_ACCESS_KEY"
+    - secretKey: s3_secret
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_SECRET"
+
+ingress:
+  enabled: true
+  groupName: prod-euc1-web-api-eks-private
+  internet: false
+  annotations:
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+resources:
+  limits:
+    memory: 64Gi
+    cpu: "8"
+  requests:
+    memory: 56Gi
+    cpu: "6"
+
+# readinessProbe:
+#   path: /
+#   port: 4000

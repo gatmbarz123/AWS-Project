@@ -1,0 +1,143 @@
+name: ec2-scheduler-windows
+
+clusterPrefixName: python-ai-eks
+
+# No deployment - this is a CronJob-only app
+deployment:
+  enabled: false
+
+serviceAccount:
+  create: true
+
+service:
+  enabled: false
+
+cronjob:
+  # Run every 30 minutes to check instance schedules
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  restartPolicy: OnFailure
+  # Using public AWS CLI image directly (not from ECR)
+  useFullImage: true
+  image:
+    name: amazon/aws-cli
+    tag: "2.24.4"
+  command:
+    - /bin/bash
+    - -c
+  args:
+    - |
+      echo "=== EC2 Instance Scheduler ==="
+      echo "Run time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      echo ""
+
+      # Parse INSTANCES_CONFIG - each line: INSTANCE_ID,TIMEZONE,START_HOUR,STOP_HOUR
+      while IFS=',' read -r INSTANCE_ID TIMEZONE START_HOUR STOP_HOUR; do
+        # Skip comments and empty lines
+        [[ "$INSTANCE_ID" =~ ^[[:space:]]*#.*$ || -z "$INSTANCE_ID" ]] && continue
+        # Trim whitespace
+        INSTANCE_ID=$(echo "$INSTANCE_ID" | xargs)
+        TIMEZONE=$(echo "$TIMEZONE" | xargs)
+        START_HOUR=$(echo "$START_HOUR" | xargs)
+        STOP_HOUR=$(echo "$STOP_HOUR" | xargs)
+
+        echo "--- Processing: $INSTANCE_ID (TZ: $TIMEZONE, Window: ${START_HOUR}:00 - ${STOP_HOUR}:00) ---"
+
+        # Check for override tag
+        OVERRIDE=$(aws ec2 describe-tags \
+          --filters "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=scheduler-override" \
+          --query 'Tags[0].Value' --output text --region "$AWS_REGION" 2>&1)
+
+        if [ "$OVERRIDE" != "None" ] && [ -n "$OVERRIDE" ]; then
+          echo "  Override tag found: $OVERRIDE"
+          # Check if override has expired (format: 2026-02-16T23:00)
+          OVERRIDE_EPOCH=$(date -d "$OVERRIDE" +%s 2>/dev/null)
+          CURRENT_EPOCH=$(date +%s)
+          if [ -n "$OVERRIDE_EPOCH" ] && [ "$CURRENT_EPOCH" -lt "$OVERRIDE_EPOCH" ]; then
+            MINS_LEFT=$(( (OVERRIDE_EPOCH - CURRENT_EPOCH) / 60 ))
+            echo "  Override active - ${MINS_LEFT} minutes remaining. SKIPPING."
+            echo ""
+            continue
+          else
+            echo "  Override EXPIRED - removing tag and resuming normal schedule"
+            aws ec2 delete-tags --resources "$INSTANCE_ID" \
+              --tags Key=scheduler-override --region "$AWS_REGION"
+          fi
+        fi
+
+        # Get current hour in the instance's timezone
+        CURRENT_HOUR=$(TZ="$TIMEZONE" date +%-H)
+        CURRENT_DAY=$(TZ="$TIMEZONE" date +%u)
+        echo "  Current local time: $(TZ="$TIMEZONE" date '+%Y-%m-%d %H:%M:%S %Z') (Hour: $CURRENT_HOUR, Day: $CURRENT_DAY)"
+
+        # Skip weekends (Saturday=6, Sunday=7)
+        if [ "$CURRENT_DAY" -eq 6 ] || [ "$CURRENT_DAY" -eq 7 ]; then
+          echo "  Weekend detected - ensuring instance is stopped"
+          STATE=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[].Instances[].State.Name' --output text --region "$AWS_REGION" 2>&1)
+          if [ "$STATE" = "running" ]; then
+            aws ec2 stop-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+            echo "  STOPPED (weekend)"
+          else
+            echo "  Already $STATE"
+          fi
+          echo ""
+          continue
+        fi
+
+        # Get current instance state
+        STATE=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[].Instances[].State.Name' --output text --region "$AWS_REGION" 2>&1)
+        if [ $? -ne 0 ]; then
+          echo "  ERROR: Failed to describe instance: $STATE"
+          echo ""
+          continue
+        fi
+        echo "  Current state: $STATE"
+
+        # Decide action based on schedule
+        if [ "$CURRENT_HOUR" -ge "$START_HOUR" ] && [ "$CURRENT_HOUR" -lt "$STOP_HOUR" ]; then
+          # Within working hours - should be running
+          if [ "$STATE" = "stopped" ]; then
+            aws ec2 start-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+            echo "  STARTED"
+          else
+            echo "  No action needed (state: $STATE)"
+          fi
+        else
+          # Outside working hours - should be stopped
+          if [ "$STATE" = "running" ]; then
+            aws ec2 stop-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+            echo "  STOPPED"
+          else
+            echo "  No action needed (state: $STATE)"
+          fi
+        fi
+        echo ""
+      done <<< "$INSTANCES_CONFIG"
+
+      echo "=== Scheduler run complete ==="
+
+config:
+  data:
+    AWS_REGION: eu-central-1
+    INSTANCES_CONFIG: |
+      # Format: INSTANCE_ID,TIMEZONE,START_HOUR,STOP_HOUR
+      # --- India instances (9 AM - 7 PM IST) ---
+      i-062d5b6f81eca93e1,Asia/Kolkata,9,19
+      i-0b6e4acb5075b0278,Asia/Kolkata,9,19
+      i-004c3b19ce98483a6,Asia/Kolkata,9,19
+      # --- New Zealand instance (9 AM - 7 PM NZST) ---
+      # not work now i-01bcbd79f57b55b36,Pacific/Auckland,9,19
+      # --- Israel instances (9 AM - 7 PM IST) ---
+      i-08ab1d14e48dd17ab,Asia/Jerusalem,9,19
+      
+resources:
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"

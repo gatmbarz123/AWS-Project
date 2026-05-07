@@ -1,0 +1,48 @@
+{{- if .Values.default }}
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 60s
+  template:
+    spec:
+      expireAfter: 168h
+      nodeClassRef:
+        name: default 
+        kind: EC2NodeClass
+        group: karpenter.k8s.aws
+      requirements:
+      {{- toYaml .Values.default.requirements | nindent 8 }}
+{{- end }}
+
+{{- range .Values.nodePools }}
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: {{ .name }}
+spec:
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 60s
+  template:
+    spec:
+      expireAfter: 168h
+      nodeClassRef:
+        name: default 
+        kind: EC2NodeClass
+        group: karpenter.k8s.aws
+      requirements:
+      {{- toYaml .requirements | nindent 8 }}
+      {{- if .taints }}
+      taints:
+      {{- toYaml .taints | nindent 8 }}
+      {{- end }}
+      {{- if .labels }}
+      labels:
+      {{- toYaml .labels | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,130 @@
+{{- if .Values.cronjob }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.name }}
+  {{- if .Values.cronjob.annotations }}
+  annotations:
+    {{- range $key, $value := .Values.cronjob.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cronjob.concurrencyPolicy | default "Forbid" }}
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit | default 3 }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit | default 3 }}
+  {{- if .Values.cronjob.timeZone }}
+  timeZone: {{ .Values.cronjob.timeZone | quote }}
+  {{- end }}
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: {{ .Values.cronjob.ttlSecondsAfterFinished | default 300 }}
+      template:
+        {{- if .Values.cronjob.podTemplate }}
+        metadata:
+          {{- if .Values.cronjob.podTemplate.labels }}
+          labels:
+            {{- toYaml .Values.cronjob.podTemplate.labels | nindent 12 }}
+          {{- end }}
+          {{- if .Values.cronjob.podTemplate.annotations }}
+          annotations:
+            {{- toYaml .Values.cronjob.podTemplate.annotations | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        spec:
+          {{- if .Values.cronjob.useFullImage }}
+          containers:
+          - name: {{ .Values.name }}
+            image: {{ .Values.cronjob.image.name }}:{{ .Values.cronjob.image.tag }}
+            imagePullPolicy: {{ .Values.cronjob.imagePullPolicy | default "IfNotPresent" }}
+            {{- if .Values.cronjob.command }}
+            command:
+              {{- toYaml .Values.cronjob.command | nindent 14 }}
+            {{- end }}
+            {{- if .Values.cronjob.args }}
+            args:
+              {{- toYaml .Values.cronjob.args | nindent 14 }}
+            {{- end }}
+            envFrom:
+            {{- if hasKey .Values "config" }}
+            - configMapRef:
+                name: '{{ .Values.name }}-configmap'
+            {{- end }}
+            {{- if hasKey .Values "secrets" }}
+            - secretRef:
+                name: '{{ .Values.name }}-secret'
+            {{- end }}
+            env:
+            {{- if hasKey .Values "additionalEnvs" }}
+            {{- range .Values.additionalEnvs }}
+            - name: {{ .name }}
+              value: {{ .value }}
+            {{- end }}
+            {{- end }}
+            {{- if hasKey .Values "resources" }}
+            resources:
+              requests:
+                cpu:    {{ .Values.resources.requests.cpu | default "100m" }}
+                memory: {{ .Values.resources.requests.memory | default "256Mi" }}
+              limits:
+                cpu:    {{ .Values.resources.limits.cpu }}
+                memory: {{ .Values.resources.limits.memory }}
+            {{- end }}
+          {{- else }}
+          containers:
+          - name: {{ .Values.name }}
+            image: {{ .Values.global.repo }}/{{ .Values.cronjob.image.name }}:{{ .Values.cronjob.image.tag }}
+            imagePullPolicy: {{ .Values.cronjob.imagePullPolicy | default "IfNotPresent" }}
+            {{- if .Values.cronjob.command }}
+            command:
+              {{- toYaml .Values.cronjob.command | nindent 14 }}
+            {{- end }}
+            {{- if .Values.cronjob.args }}
+            args:
+              {{- toYaml .Values.cronjob.args | nindent 14 }}
+            {{- end }}
+            envFrom:
+            {{- if hasKey .Values "config" }}
+            - configMapRef:
+                name: '{{ .Values.name }}-configmap'
+            {{- end }}
+            {{- if hasKey .Values "secrets" }}
+            - secretRef:
+                name: '{{ .Values.name }}-secret'
+            {{- end }}
+            env:
+            {{- if hasKey .Values "additionalEnvs" }}
+            {{- range .Values.additionalEnvs }}
+            - name: {{ .name }}
+              value: {{ .value }}
+            {{- end }}
+            {{- end }}
+            {{- if hasKey .Values "resources" }}
+            resources:
+              requests:
+                cpu:    {{ .Values.resources.requests.cpu | default "100m" }}
+                memory: {{ .Values.resources.requests.memory | default "256Mi" }}
+              limits:
+                cpu:    {{ .Values.resources.limits.cpu }}
+                memory: {{ .Values.resources.limits.memory }}
+            {{- end }}
+          {{- end }}
+          restartPolicy: {{ .Values.cronjob.restartPolicy | default "OnFailure" }}
+          {{- if .Values.serviceAccount.create }}
+          serviceAccountName: {{ .Values.name }}-sa
+          {{- end }}
+          {{- if hasKey .Values "nodeSelector" }}
+          nodeSelector:
+          {{- range $key, $value := .Values.nodeSelector }}
+            {{ $key }}: '{{ $value }}'
+          {{- end }}
+          {{- end }}
+          {{- if hasKey .Values "tolerations" }}
+          tolerations:
+          {{- with .Values.tolerations -}}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          {{- end }}
+      backoffLimit: {{ .Values.cronjob.backoffLimit | default 2 }}
+{{- end }}

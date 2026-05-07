@@ -1,0 +1,5 @@
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/dev-euc1-python-ai-eks-public-eks-external-dns
+
+txtOwnerId: dev-euc1-python-ai-eks-public

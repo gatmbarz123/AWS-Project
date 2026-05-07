@@ -1,0 +1,7 @@
+apiVersion: v2
+name: applications-secret-store
+description: A Helm chart for the applications-secret-store.
+
+type: application
+version: 0.0.0
+appVersion: 0.0.0

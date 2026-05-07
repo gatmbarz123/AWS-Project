@@ -1,0 +1,8 @@
+settings:
+  clusterName: "dev-usgw1-python-ai-eks"
+  clusterEndpoint: "https://C00C822822603E6CC3C836C2385E32BE.sk1.us-gov-west-1.eks.amazonaws.com"
+  interruptionQueue: "Karpenter-dev-usgw1-python-ai-eks"
+  isolatedVPC: true
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws-us-gov:iam::123456789012:role/KarpenterController-20260306191514453700000024"

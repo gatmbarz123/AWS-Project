@@ -1,0 +1,207 @@
+name: Promote to Demo (EU Central 1)
+run-name: Promote to Demo (EU Central 1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: 'Service to promote'
+        required: true
+        type: choice
+        options:
+          - 'web'
+          - 'python-ai'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get-prod-tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get target clusters
+        id: get-clusters
+        run: |
+          # Find all clusters that contain the service
+          CLUSTERS=$(jq -r --arg service "${{ inputs.service_name }}" \
+            '.clusters[] | select(.services | contains([$service])) | .name' .github/workflows/services.json)
+          
+          if [ -z "$CLUSTERS" ]; then
+            echo "Error: Service '${{ inputs.service_name }}' is not configured for any cluster"
+            exit 1
+          fi
+          
+          # Store clusters as a JSON array
+          CLUSTERS_JSON=$(echo "$CLUSTERS" | jq -R -s -c 'split("\n")[:-1]')
+          echo "clusters=$CLUSTERS_JSON" >> $GITHUB_OUTPUT
+          
+          echo "Found clusters for service ${{ inputs.service_name }}: $CLUSTERS"
+
+      - name: Validate service paths
+        run: |
+          # Convert clusters string back to array
+          CLUSTERS='${{ steps.get-clusters.outputs.clusters }}'
+          
+          # Check each cluster for the service directory
+          echo "$CLUSTERS" | jq -r '.[]' | while read -r cluster; do
+            SERVICE_PATH="regions/eu-central-1/environments/demo/clusters/${cluster}/values/apps/${{ inputs.service_name }}"
+            if [ ! -d "$SERVICE_PATH" ]; then
+              echo "Error: Service directory not found at: $SERVICE_PATH"
+              exit 1
+            fi
+            echo "Validated service path for cluster: $cluster"
+          done
+
+      - name: Get production environment tag
+        id: get-prod-tag
+        run: |
+          # Find the cluster for this service from services.json
+          CLUSTER=$(jq -r --arg service "${{ inputs.service_name }}" \
+            '.clusters[] | select(.services | contains([$service])) | .name' .github/workflows/services.json | head -n1)
+          
+          # Path to production values.yaml
+          PROD_VALUES_PATH="regions/eu-central-1/environments/production/clusters/${CLUSTER}/values/apps/${{ inputs.service_name }}/values.yaml"
+          
+          if [ ! -f "$PROD_VALUES_PATH" ]; then
+            echo "Error: Production values file not found at: $PROD_VALUES_PATH"
+            exit 1
+          fi
+          
+          # Extract the tag by searching for any 'tag' field in the YAML
+          TAG=$(yq eval '.. | select(has("tag")).tag' "$PROD_VALUES_PATH" | head -n1)
+          
+          if [ "$TAG" = "null" ] || [ -z "$TAG" ]; then
+            echo "Error: Could not find image tag in production values file"
+            exit 1
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Found tag to promote: $TAG"
+
+      - name: Configure AWS Prod credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github_action_oidc_role
+          aws-region: eu-central-1
+
+      - name: Login to Prod ECR
+        id: prod-ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check and pull image from Prod ECR
+        id: pull-image
+        run: |
+          PROD_ECR_URI="${{ steps.prod-ecr-login.outputs.registry }}/${{ inputs.service_name }}"
+          TAG="${{ steps.get-prod-tag.outputs.tag }}"
+          
+          # Check if image exists
+          if ! aws ecr describe-images --repository-name ${{ inputs.service_name }} --image-ids imageTag=$TAG >/dev/null 2>&1; then
+            echo "Error: Image tag $TAG not found in Prod ECR"
+            exit 1
+          fi
+          
+          # Pull the image
+          docker pull ${PROD_ECR_URI}:${TAG}
+          
+          # Store the full image URI for later use
+          echo "origin_image_uri=${PROD_ECR_URI}:${TAG}" >> $GITHUB_OUTPUT
+          echo "Pulled image: ${PROD_ECR_URI}:${TAG}"
+
+      - name: Configure AWS Demo credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github_action_oidc_role
+          aws-region: eu-central-1
+
+      - name: Login to Demo ECR
+        id: demo-ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repository if not exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names ${{ inputs.service_name }} >/dev/null 2>&1; then
+            echo "Creating ECR repository: ${{ inputs.service_name }}"
+            aws ecr create-repository --repository-name ${{ inputs.service_name }}
+          else
+            echo "ECR repository already exists: ${{ inputs.service_name }}"
+          fi
+
+      - name: Tag and push image to Demo ECR
+        run: |
+          DEMO_ECR_URI="${{ steps.demo-ecr-login.outputs.registry }}/${{ inputs.service_name }}"
+          SOURCE_TAG="${{ steps.get-prod-tag.outputs.tag }}"
+          
+          # Tag with original tag and 'latest'
+          docker tag ${{ steps.pull-image.outputs.origin_image_uri }} ${DEMO_ECR_URI}:${SOURCE_TAG}
+          docker tag ${{ steps.pull-image.outputs.origin_image_uri }} ${DEMO_ECR_URI}:latest
+          
+          # Push both tags
+          docker push ${DEMO_ECR_URI}:${SOURCE_TAG}
+          docker push ${DEMO_ECR_URI}:latest
+          
+          echo "Successfully pushed to Demo ECR with tags: ${SOURCE_TAG} and latest"
+
+  update-values:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update values files
+        id: update-values
+        run: |
+          # Get the tag from previous job
+          TAG="${{ needs.validate.outputs.tag }}"
+          
+          # Get clusters from services.json
+          CLUSTERS=$(jq -r --arg service "${{ inputs.service_name }}" \
+            '.clusters[] | select(.services | contains([$service])) | .name' .github/workflows/services.json)
+          
+          # Update values.yaml for each cluster
+          echo "$CLUSTERS" | while read -r cluster; do
+            VALUES_PATH="regions/eu-central-1/environments/demo/clusters/${cluster}/values/apps/${{ inputs.service_name }}/values.yaml"
+
+            if [ ${{ inputs.service_name }} = "web" ]; then
+              DB_MIGRATIONS_VALUES_PATH="regions/eu-central-1/environments/demo/clusters/${cluster}/values/apps/db-migrations/values.yaml"
+              # Update any occurrence of 'tag' in the YAML
+              yq eval -i '(.. | select(has("tag"))).tag = "'$TAG'"' "$DB_MIGRATIONS_VALUES_PATH"
+              # cat the file
+              cat "$DB_MIGRATIONS_VALUES_PATH"
+            fi
+            
+            # Update any occurrence of 'tag' in the YAML
+            yq eval -i '(.. | select(has("tag"))).tag = "'$TAG'"' "$VALUES_PATH"
+            # cat the file
+            cat "$VALUES_PATH"
+          done
+          
+          # Get short commit SHA for branch name
+          SHORT_SHA=$(echo $TAG | cut -d'_' -f2 | cut -c1-7)
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: promote ${{ inputs.service_name }} to demo tag ${{ needs.validate.outputs.tag }}"
+          branch: "demo/${{ steps.update-values.outputs.short_sha }}"
+          delete-branch: true
+          title: "chore: promote ${{ inputs.service_name }} to demo tag ${{ needs.validate.outputs.tag }}"
+          body: |
+            This PR promotes ${{ inputs.service_name }} to demo
+            
+            Tag: ${{ needs.validate.outputs.tag }}
+            
+            This PR was automatically created by the promotion workflow.
+          base: "main"
+

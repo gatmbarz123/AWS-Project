@@ -1,0 +1,191 @@
+global:
+  domain: "argocd.demo.euc1.example.com"
+  image:
+    tag: "v2.13.3"
+  logging:
+    format: json
+    level: warn
+  nodeSelector:
+    role: karpenter
+  tolerations:
+    - key: "role"
+      operator: "Equal"
+      value: "karpenter"
+  securityContext: # Set deployments securityContext/fsGroup to 999 so that the user of the docker image can use IAM Authenticator. We need this because the IAM Authenticator will try to mount a secret on /var/run/secrets/eks.amazonaws.com/serviceaccount/token. If the correct fsGroup (999 corresponds to the argocd user) isn’t set, this will fail.
+    runAsGroup: 999
+    fsGroup: 999
+    runAsUser: 999
+
+configs:
+  clusterCredentials:
+    web:
+      server: https://kubernetes.default.svc
+      labels:
+        web: "true"
+      config:
+        tlsClientConfig:
+          insecure: false
+    python-ai:
+      server: ""
+      labels:
+        python-ai: "true"
+        ai-gpu: "false"
+        enabled: "true"
+      config:
+        tlsClientConfig:
+          insecure: false
+          caData: ""
+        awsAuthConfig:
+          clusterName: demo-euc1-python-ai-eks
+          roleARN: arn:aws:iam::123456789012:role/demo-euc1-python-ai-eks-argocd-deployer
+  cm:
+    url: "https://argocd.demo.euc1.example.com"
+  rbac:
+    policy.csv: |
+      p, role:admin, applications, create, */*, allow
+      p, role:admin, applications, update, */*, allow
+      p, role:admin, applications, delete, */*, allow
+      p, role:admin, applications, sync, */*, allow
+      p, role:admin, applications, override, */*, allow
+      p, role:admin, applications, action/*, */*, allow
+      p, role:admin, certificates, create, *, allow
+      p, role:admin, certificates, update, *, allow
+      p, role:admin, certificates, delete, *, allow
+      p, role:admin, clusters, create, *, allow
+      p, role:admin, clusters, update, *, allow
+      p, role:admin, clusters, delete, *, allow
+      p, role:admin, repositories, create, *, allow
+      p, role:admin, repositories, update, *, allow
+      p, role:admin, repositories, delete, *, allow
+      p, role:admin, projects, create, *, allow
+      p, role:admin, projects, update, *, allow
+      p, role:admin, projects, delete, *, allow
+      p, role:admin, accounts, update, *, allow
+      p, role:admin, gpgkeys, create, *, allow
+      p, role:admin, gpgkeys, delete, *, allow
+      g, example-group-id, role:admin
+    scopes: '[groups, email]'
+
+server:
+  serviceAccount:
+    create: true
+    name: argocd-server
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/demo-euc1-web-eks-argocd-manager
+    automountServiceAccountToken: true
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    behavior:
+      scaleDown:
+       stabilizationWindowSeconds: 300
+       policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 180
+      scaleUp:
+        stabilizationWindowSeconds: 300
+        policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+  # pdb:
+  #   enabled: true
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+  resources:
+   requests:
+     cpu: 50m
+     memory: 64Mi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    hostname: "argocd.demo.euc1.example.com"
+    ingressClassName: alb
+    controller: aws
+    paths:
+      - /
+    pathType: Prefix
+    annotations:
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/backend-protocol: HTTPS
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/scheme: internal
+      alb.ingress.kubernetes.io/healthcheck-path: "/healthz"
+      alb.ingress.kubernetes.io/healthcheck-protocol: HTTPS
+      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+      alb.ingress.kubernetes.io/load-balancer-name: demo-euc1-web-eks-private-argocd
+      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+    tls: true
+    aws:
+      backendProtocolVersion: GRPC
+      serviceType: ClusterIP
+
+controller:
+  serviceAccount:
+    create: true
+    name: argocd-application-controller
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/demo-euc1-web-eks-argocd-manager
+    automountServiceAccountToken: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+
+
+repoServer:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    behavior: 
+      scaleDown:
+       stabilizationWindowSeconds: 300
+       policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 180
+      scaleUp:
+        stabilizationWindowSeconds: 300
+        policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+  # pdb:
+  #   enabled: true
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+applicationSet:
+  replicas: 2
+  ingress:
+    enabled: false
+    annotations:
+      alb.ingress.kubernetes.io/backend-protocol: HTTPS
+      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+      alb.ingress.kubernetes.io/load-balancer-name: demo-euc1-web-eks-public-argocd-wh
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/success-codes: 200-499
+      alb.ingress.kubernetes.io/target-type: ip
+    ingressClassName: alb
+    hostname: argocd-wh.demo.euc1.example.com
+  # pdb:
+  #   enabled: true
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+
+notifications:
+  enabled: true
+  argocdUrl: https://argocd.demo.euc1.example.com

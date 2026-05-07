@@ -1,0 +1,110 @@
+name: Terraform environments
+run-name: "${{ github.event.inputs.environment }}: ${{ github.event.inputs.project }} apply: ${{ github.event.inputs.apply }} (${{ github.event.inputs.region }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment to deploy'
+        required: true
+        type: string 
+      region:
+        description: 'The region to deploy'
+        required: true
+        type: string               
+      project:
+        description: 'The project to deploy'
+        required: true
+        type: string
+      apply:
+        description: 'Apply changes'
+        required: false
+        type: boolean
+        default: false
+      pr_number:
+        description: 'Pull request number'
+        required: false
+        type: number
+
+permissions:
+  id-token: write 
+  contents: write 
+  pull-requests: write
+
+env:
+  # AWS GovCloud dev account: 123456789012
+  # AWS GovCloud prod account: 123456789012
+  # AWS GovCloud mng account: 123456789012
+  AWS_ACCOUNT_ID: ${{ github.event.inputs.environment == 'production' && '123456789012' || github.event.inputs.environment == 'management' && '123456789012' || '123456789012' }}
+
+jobs:
+  terraform:
+    name: ${{ github.event.inputs.environment }}-${{ github.event.inputs.region }}-${{ github.event.inputs.project }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.region != 'us-gov-west-1' }}
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      - name: Configure AWS Credentials (Role Assumption for GovCloud)
+        if: ${{ github.event.inputs.region == 'us-gov-west-1' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws-us-gov:iam::${{ env.AWS_ACCOUNT_ID }}:role/github_action_oidc_role
+          aws-region: ${{ github.event.inputs.region }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.5
+    
+      - name: Terraform Init, Validate and Plan
+        working-directory: main/${{ github.event.inputs.region }}/${{ github.event.inputs.environment }}/${{ github.event.inputs.project }}
+        run: |
+          env=${{ github.event.inputs.environment }}
+          region=${{ github.event.inputs.region }}
+          project=${{ github.event.inputs.project }}
+          terraform init
+          terraform validate -no-color
+          terraform fmt -check && \
+          terraform fmt -recursive -check
+          if [ $? -ne 0 ]; then
+            echo "Terraform format check failed. Please run 'terraform fmt' to fix formatting errors."
+            exit 1
+          fi
+          terraform plan -compact-warnings -var-file ../env.tfvars -var-file ../../region.tfvars -out plan.out
+          terraform show -no-color plan.out > plan.txt
+          cat plan.txt >> $GITHUB_STEP_SUMMARY
+        
+      - name: Get workflow URL
+        if: ${{ github.event.inputs.apply == 'false' && github.event.inputs.pr_number != null }}
+        id: get-workflow-url
+        run: |
+          echo "workflow_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
+    
+      - name: Comment PR
+        uses: thollander/actions-comment-pull-request@v2
+        if: ${{ github.event.inputs.apply == 'false' && github.event.inputs.pr_number != null }}
+        with:
+          message: |
+            [Link to terraform plan summary - ${{ github.event.inputs.environment }}-${{ github.event.inputs.region }}-${{ github.event.inputs.project }}](${{ env.workflow_url }})
+          mode: upsert
+          comment_tag: terraform_plan_summary
+          create_if_not_exists: true
+          pr_number: ${{ github.event.inputs.pr_number }}
+      
+      - name: Terraform Apply
+        working-directory: main/${{ github.event.inputs.region }}/${{ github.event.inputs.environment }}/${{ github.event.inputs.project }}
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: |
+          terraform apply plan.out 
+        

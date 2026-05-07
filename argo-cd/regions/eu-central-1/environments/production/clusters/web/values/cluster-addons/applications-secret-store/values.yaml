@@ -1,0 +1,13 @@
+namespace: prod
+
+serviceAccount:
+  name: applications-secretstore-sa
+  roleArn: arn:aws:iam::123456789012:role/prod-euc1-web-eks-applications-secretstore
+
+clusterSecretStore:
+  enabled: true
+  name: applications-cluster-store
+  serviceAccount:
+    name: applications-secretstore-sa
+    namespace: external-secrets
+    roleArn: arn:aws:iam::123456789012:role/prod-euc1-web-eks-applications-secretstore-es

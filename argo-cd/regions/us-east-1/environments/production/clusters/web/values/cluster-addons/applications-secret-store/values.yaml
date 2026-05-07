@@ -1,0 +1,5 @@
+namespace: external-secrets
+
+serviceAccount:
+  name: applications-secretstore-sa
+  roleArn: arn:aws:iam::123456789012:role/prod-use1-web-eks-applications-secretstore-es

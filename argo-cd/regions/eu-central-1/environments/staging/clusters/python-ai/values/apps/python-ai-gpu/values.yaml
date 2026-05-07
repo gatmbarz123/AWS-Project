@@ -1,0 +1,66 @@
+name: python-ai-gpu
+clusterPrefixName: python-ai-eks
+deployment:
+  enabled: true
+  image:
+    name: python-ai
+    tag: 'staging_d062f6b'
+  replicas: 1
+  deploymentStrategy: RollingUpdate
+  maxSurge: 25%
+  maxUnavailable: 25%
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    admission.datadoghq.com/enabled: "false"
+    tags.datadoghq.com/service: python-ai-gpu
+    tags.datadoghq.com/project: python-ai
+    tags.datadoghq.com/team: algo
+    tags.datadoghq.com/env: stg
+  podAnnotations:
+    ad.datadoghq.com/python-ai-gpu.logs: '[{"source":"python-ai", "service":"python-ai-gpu", "tags":["env:stg","project:python-ai","team:algo"]}]'
+# command: sleep 3000
+# autoscaling:
+#   minReplicas: 1
+#   maxReplicas: 2
+
+serviceAccount:
+  create: false
+
+nodeSelector:
+  nvidia.com/gpu: "true"
+  workload-type: gpu
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  - key: workload-type
+    value: gpu
+    operator: Equal
+    effect: NoSchedule
+
+service:
+  enabled: true
+  targetPort: 80
+
+config:
+  data:
+    AI_LOG_LEVEL: "DEBUG"
+    S3_BUCKET: "stg-euc1-example-projects"
+    S3_REGION: "eu-central-1"
+    APP_VERSION: "2.8.0"
+
+ingress:
+  enabled: true
+  groupName: stg-euc1-ai-gpu-eks-private
+  internet: false
+  annotations:
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:eu-central-1:123456789012:regional/webacl/stg-euc1-waf-acl-regional/00000000-0000-0000-0000-000000000000"
+
+resources:
+  limits:
+    ephemeral-storage: "4Gi"
+  requests:
+    ephemeral-storage: "3Gi"

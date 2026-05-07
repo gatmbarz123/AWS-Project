@@ -1,0 +1,12 @@
+domainFilters:
+  - prod.use1.example.com
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/prod-use1-web-eks-private-eks-external-dns
+
+env:
+  - name: AWS_DEFAULT_REGION
+    value: us-east-1
+txtOwnerId: prod-use1-web-eks-private
+

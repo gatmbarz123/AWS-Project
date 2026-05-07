@@ -1,0 +1,5 @@
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/prod-euc1-web-eks-aws-load-balancer-controller
+
+clusterName: prod-euc1-web-eks

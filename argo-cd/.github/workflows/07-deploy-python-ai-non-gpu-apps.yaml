@@ -1,0 +1,49 @@
+name: Run ArgoCD python-ai-non-gpu applications
+run-name: Run ArgoCD python-ai-non-gpu applications
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        description: 'Environment name'
+        required: true
+        default: 'dev'
+        options:
+          - 'dev'
+          - 'qa'
+          - 'demo'
+          - 'staging'
+          - 'prod-euc1'
+          - 'prod-use1'
+          - 'dev-usgw1'
+          - 'prod-usgw1'
+
+permissions:
+  id-token: write # This is required for requesting the OIDC
+  contents: read
+  
+jobs:
+  argocd:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      - name: update kubeconfig - ${{ vars.AWS_CLUSTER_WEB_NAME }}
+        run: aws eks --region ${{ vars.AWS_REGION }} update-kubeconfig --name ${{ vars.AWS_WEB_CLUSTER_NAME }}
+        
+      - name: Run ArgoCD - applications configuration
+        working-directory: regions/${{ vars.AWS_REGION }}/environments/${{ vars.ENVIRONMENT }}/argocd/applicationsets
+        run: |
+          kubectl apply -f ./python-ai-non-gpu-applications.yaml

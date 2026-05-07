@@ -1,0 +1,128 @@
+name: web
+clusterPrefixName: web-eks
+deployment:
+  enabled: true
+  image:
+    tag: 'staging_73d926b'
+  replicas: 1
+  deploymentStrategy: RollingUpdate
+  maxSurge: 25%
+  maxUnavailable: 25%
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    admission.datadoghq.com/enabled: "false"
+    tags.datadoghq.com/service: web
+    tags.datadoghq.com/project: web
+    tags.datadoghq.com/team: software
+    tags.datadoghq.com/env: stg
+  podAnnotations:
+    ad.datadoghq.com/web.logs: '[{"source":"elixir", "service":"web", "tags":["env:stg","project:web","team:software"]}]'
+# autoscaling:
+#   minReplicas: 1
+#   maxReplicas: 2
+
+serviceAccount:
+  create: true
+
+service:
+  enabled: true
+  targetPort: 4000
+
+additionalEnvsFrom:
+  - name: HOST_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.hostIP
+
+additionalEnvs:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://$(HOST_IP):4318"
+
+config:
+  data:
+    ENV_SUFFIX: "staging"
+    APP_VERSION: "9.6.0"
+    PHX_HOST: "web.stg.euc1.example.com"
+    S3_BUCKET: "stg-euc1-example-projects"
+    S3_REGION: "eu-central-1"
+    AWS_MAILER_ENDPOINT: https://email.eu-central-1.amazonaws.com
+    AWS_MAILER_FROM: "user@example.com"
+    NOTIFICATION_ADDRESS: "user@example.com"
+    PYTHON_AI_NODE_ENDPOINT_URL: https://python-ai-non-gpu.stg.euc1.example.com
+    PYTHON_GPU_AI_NODE_ENDPOINT_URL: https://python-ai-gpu.stg.euc1.example.com
+    PYTHON_AI_API_NODE_ENDPOINT_URL: https://python-ai-api-non-gpu.stg.euc1.example.com
+    DEFAULT_PROGRAMMER_ID: "8"
+    DEFAULT_FEEDBACK_USER_EMAIL: "user@example.com"
+    CAM_ANALYTICS_ENABLED: "false"
+    CAM_ANALYTICS_EMAILS: "user@example.com"
+    CAM_ANALYTICS_REPORTING_INTERVAL: "3600000"
+    AIRTABLE_BASE: "example-airtable-base"
+    LMS_HUB_LOG_LEVEL: "debug"
+    SQS_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/example-queue
+    CIMATRON_AUTH_URL: "https://api.example.com/example-endpoint"
+    CIMATRON_LICENSE_API_URL: "https://api.example.com/example-endpoint"
+    CA_API_TYPE2_AUTH_URL: "http://localhost:4003/api/isca/validate"
+
+secrets:
+  storeKind: ClusterSecretStore
+  storeName: applications-cluster-store
+  template:
+    SECRET_KEY_BASE: "{{ .keyBase }}"
+    DATABASE_URL: "ecto://{{ .username }}:{{ .password | urlquery }}@{{ .rdsWriterEndpoint }}/datacore"
+    S3_ACCESS_KEY_ID: "{{ .s3_access_key }}"
+    S3_SECRET_ACCESS_KEY: "{{ .s3_secret }}"
+    AIRTABLE_API_KEY: "{{ .airtable_key }}"
+    CIMATRON_API_KEY: "{{ .cimatron_api_key }}"
+  data:
+    - secretKey: cimatron_api_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "CIMATRON_API_KEY"
+    - secretKey: airtable_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "AIRTABLE_KEY"
+    - secretKey: keyBase
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "SECRET_KEY_BASE"
+    - secretKey: rdsWriterEndpoint
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "RDS_WRITER_ENDPOINT"
+    - secretKey: password
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "password"
+    - secretKey: username
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "username"
+    - secretKey: s3_access_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_ACCESS_KEY"
+    - secretKey: s3_secret
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_SECRET"
+ingress:
+  enabled: true
+  groupName: stg-euc1-web-eks-private
+  internet: false
+  annotations:
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:eu-central-1:123456789012:regional/webacl/stg-euc1-waf-acl-regional/00000000-0000-0000-0000-000000000000"
+    
+pdb:
+  enabled: false
+  minAvailable: 1
+
+resources:
+  limits:
+    memory: 64Gi
+    cpu: "8"
+  requests:
+    memory: 56Gi  
+    cpu: "6"

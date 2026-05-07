@@ -1,0 +1,2 @@
+datadog:
+  clusterName: demo-euc1-web-eks

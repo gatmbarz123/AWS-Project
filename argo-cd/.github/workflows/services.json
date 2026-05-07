@@ -1,0 +1,29 @@
+{
+  "clusters":
+  [
+    {
+      "name": "web",
+      "services": ["web"]
+    },
+    {
+      "name": "ai-gpu",
+      "services": ["python-ai"]
+    },
+    {
+      "name": "ai-non-gpu",
+      "services": ["python-ai"]
+    },
+    {
+      "name": "ai-api-non-gpu",
+      "services": ["python-ai-api"]
+    },
+    {
+      "name": "python-ai",
+      "services": [
+          "python-ai-gpu", 
+          "python-ai-non-gpu", 
+          "python-ai-api-non-gpu"
+      ]
+    }
+  ]
+}

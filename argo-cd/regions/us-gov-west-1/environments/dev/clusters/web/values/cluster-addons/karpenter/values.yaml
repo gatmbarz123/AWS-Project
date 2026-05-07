@@ -1,0 +1,7 @@
+settings:
+  clusterName: "dev-usgw1-web-eks"
+  clusterEndpoint: "https://24F902896014EE3C07436DBF678F2F01.gr7.us-gov-west-1.eks.amazonaws.com"
+  interruptionQueue: "Karpenter-dev-usgw1-web-eks"
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws-us-gov:iam::123456789012:role/KarpenterController-20260306191514453700000023"

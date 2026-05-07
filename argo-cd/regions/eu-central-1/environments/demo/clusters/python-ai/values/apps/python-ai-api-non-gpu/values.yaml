@@ -1,0 +1,77 @@
+name: python-ai-api-non-gpu
+clusterPrefixName: ai-api-non-gpu-eks
+deployment:
+  enabled: true
+  image:
+    name: python-ai
+    tag: 'demo_latest'
+  replicas: 1
+  deploymentStrategy: RollingUpdate
+  maxSurge: 25%
+  maxUnavailable: 25%
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    admission.datadoghq.com/enabled: "false"
+    tags.datadoghq.com/service: python-ai-api-non-gpu
+    tags.datadoghq.com/project: python-ai
+    tags.datadoghq.com/team: algo
+    tags.datadoghq.com/env: demo
+  podAnnotations:
+    ad.datadoghq.com/python-ai-api-non-gpu.logs: '[{"source":"python-ai-api", "service":"python-ai-api-non-gpu", "tags":["env:demo","project:python-ai","team:algo"]}]'
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 4
+  targetMemoryUtilizationPercentage: 75
+  targetCPUUtilizationPercentage: 75
+
+serviceAccount:
+  create: false
+service:
+  enabled: true
+  targetPort: 80
+config:
+  data:
+    AI_LOG_LEVEL: "DEBUG"
+    S3_BUCKET: "demo-euc1-example-projects"
+    S3_REGION: "eu-central-1"
+secrets:
+  storeKind: ClusterSecretStore
+  storeName: applications-cluster-store
+  template:
+    AWS_ACCESS_KEY_ID: "{{ .s3_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ .s3_secret }}"
+  data:
+    - secretKey: s3_access_key
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_ACCESS_KEY"
+    - secretKey: s3_secret
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "S3_SECRET"
+ingress:
+  enabled: true
+  groupName: demo-euc1-ai-api-non-gpu-eks-private
+  internet: false
+  annotations:
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=360
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+
+resources:
+  limits:
+    memory: "20Gi"
+    cpu: "5"
+  requests:
+    memory: "18Gi"
+    cpu: "4"
+
+nodeSelector:
+  workload-type: api
+
+tolerations:
+  - key: workload-type
+    value: api
+    operator: Equal
+    effect: NoSchedule

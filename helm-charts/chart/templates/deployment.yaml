@@ -1,0 +1,57 @@
+{{- if hasKey .Values "deployment" }}
+{{- if .Values.deployment.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: '{{ .Values.name }}'
+  labels:
+    app: '{{ .Values.name }}'
+    {{- if .Values.deployment.labels }}
+    {{- toYaml .Values.deployment.labels | nindent 4 }}
+    {{- end }}
+  annotations:
+    configmap.reloader.stakater.com/reload: "{{ .Values.name }}-configmap"
+    secret.reloader.stakater.com/reload: "{{ .Values.name }}-secret"
+    {{- if .Values.deployment.annotations }}
+    {{- toYaml .Values.deployment.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  progressDeadlineSeconds: {{ .Values.deployment.progressDeadlineSeconds | default 600 }}
+  revisionHistoryLimit: 2
+  {{- if not (hasKey .Values "autoscaling") }}
+  replicas: {{ .Values.deployment.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: '{{ .Values.name }}'
+  strategy:
+    type: "{{ .Values.deployment.deploymentStrategy | default "RollingUpdate" }}"
+    rollingUpdate:
+      maxSurge: "{{ .Values.deployment.maxSurge | default "25%" }}"
+      maxUnavailable: "{{ .Values.deployment.maxUnavailable | default "25%" }}"
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}
+        {{- if .Values.deployment.labels }}
+        {{- toYaml .Values.deployment.labels | nindent 8 }}
+        {{- end }}
+      {{- if .Values.deployment.podAnnotations }}
+      annotations:
+        {{- toYaml .Values.deployment.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec: 
+    {{- include "chartname.podTemplate" . | nindent 6 }}
+      volumes:
+        {{- if hasKey .Values "pvc" }}
+        - name: {{ .Values.pvc.volumeName }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.name }}-claim
+        {{- end }}
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.name }}-sa
+      {{- else }}
+      serviceAccountName: "default"
+      {{- end }}
+{{- end }}
+{{- end }}

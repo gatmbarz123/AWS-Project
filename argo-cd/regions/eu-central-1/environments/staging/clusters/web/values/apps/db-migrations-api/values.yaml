@@ -1,0 +1,54 @@
+name: db-migrations-api
+
+job:
+  image:
+    name: "web"
+    tag: 'main_7c321b9'
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  podTemplate:
+    labels:
+      admission.datadoghq.com/enabled: "false"
+      tags.datadoghq.com/service: db-migrations-api
+      tags.datadoghq.com/project: web-api
+      tags.datadoghq.com/team: software
+      tags.datadoghq.com/env: stg
+    annotations:
+      ad.datadoghq.com/db-migrations-api.logs: '[{"source":"elixir", "service":"db-migrations-api", "tags":["env:stg","project:web-api","team:software"]}]'
+      
+  command:
+    - "bin/web_server"
+  args:
+    - "eval"
+    - "WebServer.Release.migrate()"
+
+config:
+  data:
+    PHX_HOST: "web-api.stg.euc1.example.com"
+    ENV_SUFFIX: "staging"
+    APP_VERSION: "9.2.0"
+
+secrets:
+  storeKind: ClusterSecretStore
+  storeName: applications-cluster-store
+  template:
+    SECRET_KEY_BASE: "{{ .keyBase }}"
+    DATABASE_URL: "ecto://{{ .username }}:{{ .password | urlquery }}@{{ .rdsWriterEndpoint }}/datacore"
+
+  data:
+    - secretKey: keyBase
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "SECRET_KEY_BASE"
+    - secretKey: rdsWriterEndpoint
+      remoteRef:
+        key: "Application/example/default-secret"
+        property: "RDS_WRITER_ENDPOINT"
+    - secretKey: password
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "password"
+    - secretKey: username
+      remoteRef:
+        key: "rds!cluster-example"
+        property: "username"

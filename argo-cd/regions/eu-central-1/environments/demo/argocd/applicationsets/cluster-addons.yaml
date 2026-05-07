@@ -1,0 +1,91 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: enabled
+                    operator: NotIn
+                    values:
+                      - "false"
+          - list:
+              elements:
+                - addon: aws-load-balancer-controller
+                  chart: aws-load-balancer-controller
+                  repo: https://aws.github.io/eks-charts
+                  targetRevision: 1.11.0
+                  namespace: aws-lb-controller
+                - addon: private-external-dns
+                  chart: external-dns
+                  repo: https://kubernetes-sigs.github.io/external-dns/
+                  targetRevision: 1.15.0
+                  namespace: external-dns
+                - addon: public-external-dns
+                  chart: external-dns
+                  repo: https://kubernetes-sigs.github.io/external-dns/
+                  targetRevision: 1.15.0
+                  namespace: external-dns
+                - addon: metrics-server
+                  chart: metrics-server
+                  repo: https://kubernetes-sigs.github.io/metrics-server/
+                  targetRevision: 3.12.2
+                  namespace: kube-system
+                - addon: external-secrets
+                  chart: external-secrets
+                  repo: https://charts.external-secrets.io
+                  targetRevision: 0.15.1
+                  namespace: external-secrets
+                - addon: kube-prometheus-stack
+                  chart: kube-prometheus-stack
+                  repo: https://prometheus-community.github.io/helm-charts
+                  targetRevision: 67.10.0
+                  namespace: monitoring
+                - addon: reloader
+                  chart: reloader
+                  repo: https://stakater.github.io/stakater-charts
+                  targetRevision: 1.2.1
+                  namespace: reloader
+                - addon: datadog
+                  chart: datadog
+                  repo: https://helm.datadoghq.com
+                  targetRevision: 3.117.4
+                  namespace: datadog
+
+  template:
+    metadata:
+      name: '{{.name}}-{{.addon}}'
+    spec:
+      project: default
+      sources:
+      - repoURL: 'https://github.com/gatmbarz123/AWS-Project.git'
+        targetRevision: main
+        ref: values
+
+      - repoURL: '{{.repo}}'
+        chart: '{{.chart}}'
+        targetRevision: '{{.targetRevision}}'
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+            # Load common values for the addon
+            - $values/regions/eu-central-1/environments/demo/cluster-addons/{{.addon}}/values.yaml
+            # Load cluster-specific overrides
+            - $values/regions/eu-central-1/environments/demo/clusters/{{.name}}/values/cluster-addons/{{.addon}}/values.yaml
+      destination:
+        server: "{{.server}}"
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

@@ -1,0 +1,42 @@
+datadog:
+  clusterName: prod-use1-python-ai-eks
+  apm:
+    # APM Single Step Instrumentation
+    # Requires Cluster Agent 7.49+.
+    instrumentation:
+      # datadog.apm.instrumentation.enabled -- Enable injecting the Datadog APM libraries into all pods in the cluster.
+      enabled: true
+
+      # datadog.apm.instrumentation.enabledNamespaces -- Enable injecting the Datadog APM libraries into pods in specific namespaces.
+      enabledNamespaces: []
+
+      # datadog.apm.instrumentation.disabledNamespaces -- Disable injecting the Datadog APM libraries into pods in specific namespaces.
+      disabledNamespaces: []
+
+      # datadog.apm.instrumentation.libVersions -- Inject specific version of tracing libraries with Single Step Instrumentation.
+      libVersions: {}
+
+      # datadog.apm.instrumentation.targets -- Enable target based workload selection.
+      # Requires Cluster Agent 7.64.0+
+      targets:
+        - name: "default-target"
+          namespaceSelector:
+            matchNames:
+              - "python-ai-gpu"
+              - "python-ai-non-gpu"
+              - "python-ai-api-non-gpu"
+          ddTraceVersions:
+            python: "3"
+      # datadog.apm.instrumentation.skipKPITelemetry -- Disable generating Configmap for APM Instrumentation KPIs
+      skipKPITelemetry: false
+
+      # Language detection currently only detects languages and adds them as annotations on deployments, but doesn't use these languages for injecting libraries to applicative pods.
+      # It requires Agent 7.52+ and Cluster Agent 7.52+
+      language_detection:
+        # datadog.apm.instrumentation.language_detection.enabled -- Run language detection to automatically detect languages of user workloads (preview).
+        enabled: true
+
+      # This feature is in preview. It requires Cluster Agent 7.57+.
+      injector:
+        # datadog.apm.instrumentation.injector.imageTag -- The image tag to use for the APM Injector (preview).
+        imageTag: ""

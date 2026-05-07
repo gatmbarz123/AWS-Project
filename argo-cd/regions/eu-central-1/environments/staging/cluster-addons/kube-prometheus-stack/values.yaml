@@ -1,0 +1,83 @@
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      cpu: 200m
+      memory: 200Mi
+  prometheusConfigReloader:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 650Mi
+      limits:
+        memory: 650Mi
+prometheus:
+  prometheusSpec:
+    replicas: 2
+nodeExporter:
+  enabled: true
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          separator: ;
+          regex: ^(.*)$
+          targetLabel: node
+          replacement: $1
+          action: replace   
+grafana:
+  enabled: false
+alertmanager:
+  enabled: false
+  replicas: 2
+  alertmanagerSpec:
+    resources:
+      requests:
+        memory: 400Mi
+        cpu: 50m
+    alertmanagerConfigMatcherStrategy:
+      type: None
+  templateFiles:
+    slack.tmpl: |-
+      {{ define "slack.title" }}
+      :bell: [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+      {{ end }}
+
+      {{ define "slack.color" }}
+      {{- if eq .Status "firing" -}}
+        {{- if eq .CommonLabels.severity "warning" -}}
+          warning
+        {{- else if eq .CommonLabels.severity "critical" -}}
+          danger
+        {{- else -}}
+          #439FE0
+        {{- end -}}
+      {{- else -}}
+        good
+      {{- end -}}
+      {{ end }}
+
+      {{ define "slack.text" }}
+      {{- range .Alerts -}}
+      *:warning: Severity:* {{ .Labels.severity }}
+      {{- if .Labels.instance }}
+      *:computer: Instance:* {{ .Labels.instance }}
+      {{- end }}
+      {{- if .Labels.pod }}
+      *:package: Pod:* {{ .Labels.pod }}
+      {{- end }}
+      {{- if .Annotations.description }}
+      *:memo: Description:* {{ .Annotations.description }}
+      {{- end }}
+      *:clock1: Started:* :clock10: {{ .StartsAt.Format "15:04:05" }} :spiral_calendar_pad: {{ .StartsAt.Format "2006-01-02" }}
+      {{- if .EndsAt.After .StartsAt }}
+      *:checkered_flag: Resolved:* :clock10: {{ .EndsAt.Format "15:04:05" }} :spiral_calendar_pad: {{ .EndsAt.Format "2006-01-02" }}
+      {{- end }}
+
+      {{ end }}
+      {{ end }}      
+  ingress:
+    enabled: false

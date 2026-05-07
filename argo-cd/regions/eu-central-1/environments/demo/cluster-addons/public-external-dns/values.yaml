@@ -1,0 +1,28 @@
+serviceAccount:
+  create: true
+  name: public-eks-external-dns-sa
+  automountServiceAccountToken: true
+
+logLevel: warning
+logFormat: json
+
+deploymentStrategy: 
+  type: RollingUpdate
+revisionHistoryLimit: 3
+policy: sync
+provider: aws
+resources:
+  requests:
+    cpu: 10m
+    memory: 20Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+sources:
+  - ingress
+
+extraArgs:
+  - --annotation-filter=alb.ingress.kubernetes.io/scheme=internet-facing
+  - --aws-zone-type=public
+  - --aws-assume-role=arn:aws:iam::123456789012:role/mng-euc1-for-demo-account-route53-access

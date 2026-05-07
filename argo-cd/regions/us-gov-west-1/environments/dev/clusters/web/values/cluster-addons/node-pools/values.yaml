@@ -1,0 +1,5 @@
+karpenter:
+  iamRole: "karpenter-eks-node-group-20260306190730379900000018"
+
+clusterName: "dev-usgw1-web-eks"
+clusterVersion: "1.33"

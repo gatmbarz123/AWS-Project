@@ -1,0 +1,7 @@
+settings:
+  clusterName: "dev-euc1-web-eks"
+  clusterEndpoint: "https://33F477F0CF9FA0D434FA6D8426F3F363.gr7.eu-central-1.eks.amazonaws.com"
+  interruptionQueue: "Karpenter-dev-euc1-web-eks"
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/KarpenterController-20250114154829558600000036"

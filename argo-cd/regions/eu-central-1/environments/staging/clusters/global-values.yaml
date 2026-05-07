@@ -1,0 +1,10 @@
+global:
+  environment: staging
+  short_environment: stg
+  region: eu-central-1
+  short_region: euc1
+  repo: "123456789012.dkr.ecr.eu-central-1.amazonaws.com"
+  certificate: "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+  example_private_hostname: stg.euc1.example.com
+  example_public_hostname: euc1.example.com
+  account: "123456789012"

@@ -1,0 +1,26 @@
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller-sa
+
+clusterSecretsPermissions:
+  allowAllSecrets: true
+
+podDisruptionBudget:
+  maxUnavailable: 1
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+replicaCount: 2
+logLevel: warn
+
+vpcId: 'vpc-0be9521449620041a'

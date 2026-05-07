@@ -1,0 +1,14 @@
+reloader:
+  watchGlobally: true
+  namespaceSelector: "kubernetes.io/metadata.name in (python-ai-non-gpu,python-ai-gpu,python-ai-api-non-gpu,demo)"
+  ignoreJobs: true
+  reloadStrategy: annotations
+  logLevel: info
+  deployment:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 512Mi

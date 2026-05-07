@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: web-api-cluster-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  web: "true"
+          - git:
+              repoURL: https://github.com/gatmbarz123/AWS-Project.git
+              revision: main
+              files:
+                - path: regions/us-east-1/environments/production/clusters/web/values/apps/web-api/values.yaml
+                - path: regions/us-east-1/environments/production/clusters/web/values/apps/db-migrations-api/values.yaml
+
+  template:
+    metadata:
+      name: "{{.path.basename}}"
+      namespace: argocd
+
+    spec:
+      project: default
+
+      sources:
+      - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+        targetRevision: main
+        ref: values
+
+      - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+        targetRevision: main
+        path: 'chart'
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+            - $values/regions/us-east-1/environments/production/clusters/global-values.yaml
+            - $values/regions/us-east-1/environments/production/clusters/web/values/apps/{{.path.basename}}/values.yaml
+
+      destination:
+        server: "{{.server}}"
+        namespace: "web-api"
+
+      # Sync policy
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+
+  templatePatch: |
+    {{- if eq .path.basename "db-migrations-api" }}
+    spec:
+      syncPolicy:
+        automated:
+          selfHeal: false
+    {{- end }}

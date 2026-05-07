@@ -1,0 +1,99 @@
+name: Terraform Trigger
+
+on:
+  # Trigger on Pull Request (PR) for planning
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize]
+
+  # Trigger on Push to Dev branch for applying
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-run-matrix:
+    name: generate matrix
+    runs-on: ubuntu-latest
+    outputs:
+      regional-states-json: ${{ steps.read-regional-file.outputs.content }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check path changes
+        uses: dorny/paths-filter@v3
+        id: path-changes
+        with:
+          list-files: shell
+          filters: |
+            environments:
+              - 'main/eu-central-1/playground/**'
+              - 'main/eu-central-1/dev/**'
+              - 'main/eu-central-1/staging/**'
+              - 'main/eu-central-1/production/**'
+              - 'main/eu-central-1/management/**'
+              - 'main/eu-central-1/demo/**'
+              - 'main/us-east-1/production/**'
+              - 'main/us-east-1/management/**'
+              - 'main/us-gov-west-1/management/**'
+              - 'main/us-gov-west-1/dev/**'
+              - 'main/us-gov-west-1/production/**'
+
+      - name: Generate regional terraform matrix file
+        id: generate-regional-terraform-matrix
+        if: steps.path-changes.outputs.environments == 'true'
+        run: |
+          #!/bin/bash
+          matrix=$(echo "${{ steps.path-changes.outputs.environments_files }}" | tr ' ' '\n' | awk -F'/' 'NF >= 5 {print $2 "," $3 "," $4}' | sort -u)
+          jsonMatrix=$(echo "$matrix" | awk -F, '{print "{\"environment\":\"" $2 "\",\"region\":\"" $1 "\", \"project\":\"" $3 "\"}"}' | jq -s '{"states": .}')
+          echo $jsonMatrix
+          echo "$jsonMatrix" > regional-states-file
+          cat regional-states-file
+
+      - name: Read the regional terraform matrix file
+        if: ${{ steps.generate-regional-terraform-matrix.outcome == 'success' }}
+        id: read-regional-file
+        uses: juliangruber/read-file-action@v1.1.7
+        with:
+          path: ./regional-states-file
+
+  trigger-envs-pipelines:
+    runs-on: ubuntu-latest
+    needs: generate-run-matrix
+    if: ${{ needs.generate-run-matrix.outputs.regional-states-json }}
+    strategy:
+      matrix:
+        states: ${{ fromJson(needs.generate-run-matrix.outputs.regional-states-json).states }}
+    steps:
+      - name: echo
+        run: |
+          echo '${{ matrix.states.environment }} / ${{ matrix.states.region }} / ${{ matrix.states.project }}'
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "REF=${{ github.head_ref }}" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            echo "REF=main" >> $GITHUB_ENV
+          fi
+
+      - name: Trigger Terraform pipeline
+        uses: convictional/trigger-workflow-and-wait@v1.6.5
+        with:
+          owner: gatmbarz123
+          repo: AWS-Project
+          github_token: ${{ secrets.EXAMPLE_GITHUB_TOKEN }}
+          client_payload: >-
+            {
+              "environment": "${{ matrix.states.environment }}",
+              "region": "${{ matrix.states.region }}",
+              "project": "${{ matrix.states.project }}",
+              "apply":  "${{ github.ref == 'refs/heads/main' || 'false' }}",
+              "pr_number": "${{ github.event.number }}"
+            }
+          workflow_file_name: 01-run-envs-terraform.yaml
+          ref: ${{ env.REF }}

@@ -1,0 +1,12 @@
+domainFilters:
+  - demo.euc1.example.com
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/demo-euc1-web-eks-private-eks-external-dns
+
+env:
+  - name: AWS_DEFAULT_REGION
+    value: eu-central-1
+txtOwnerId: demo-euc1-web-eks-private
+

@@ -1,0 +1,5 @@
+karpenter:
+  iamRole: "karpenter-eks-node-group-20250424123018267500000020"
+
+clusterName: "stg-euc1-web-eks"
+clusterVersion: "1.33"

@@ -1,0 +1,35 @@
+{{- if .Values.ingress }}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.name }}-ingress
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443},{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/scheme: {{ if .Values.ingress.internet }}internet-facing{{ else }}internal{{ end }}
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificate }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: "alb"
+  rules:
+  {{- if .Values.ingress.internet }}
+  - host: '{{ .Values.name }}.{{ .Values.global.example_public_hostname }}'
+  {{- else }}
+  - host: '{{ .Values.name }}.{{ .Values.global.example_private_hostname }}'
+  {{- end }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: {{ .Values.ingress.path | default "/" }}     
+        backend:
+          service:
+            name: {{ .Values.name }}
+            port:
+              number: 80
+{{- end }}
+{{- end }}

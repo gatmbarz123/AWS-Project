@@ -1,0 +1,68 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: web-api-cluster-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  web: "true"
+          - git:
+              repoURL: https://github.com/gatmbarz123/AWS-Project.git
+              revision: main
+              files:
+                - path: regions/eu-central-1/environments/staging/clusters/web/values/apps/web-api/values.yaml
+                - path: regions/eu-central-1/environments/staging/clusters/web/values/apps/db-migrations-api/values.yaml
+              
+  template:      
+    metadata:
+      name: "{{.path.basename}}"
+      namespace: argocd
+
+    spec:
+      # The project the application belongs to.
+      project: default
+
+      # Source of the application manifests
+      sources:
+      - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+        targetRevision: main
+        ref: values
+
+      - repoURL: https://github.com/gatmbarz123/AWS-Project.git
+        targetRevision: main
+        path: 'chart'
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+            - $values/regions/eu-central-1/environments/staging/clusters/global-values.yaml
+            - $values/regions/eu-central-1/environments/staging/clusters/web/values/apps/{{.path.basename}}/values.yaml
+            
+      
+      # Destination cluster and namespace to deploy the application
+      destination:
+        server: "{{.server}}"
+        namespace: "web-api"
+
+      # Sync policy
+      syncPolicy:
+        # Automated sync retries failed attempts 5 times with delays: 5s, 10s, 20s, 40s, 80s
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+
+  templatePatch: |
+    {{- if eq .path.basename "db-migrations-api" }}
+    spec:
+      syncPolicy:
+        automated:
+          selfHeal: false
+    {{- end }}

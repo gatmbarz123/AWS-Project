@@ -1,0 +1,86 @@
+name: Install Argo CD chart (New - 2 Clusters Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - qa
+          - demo
+          - staging
+          - prod-euc1
+          - prod-use1
+          - dev-usgw1
+          - prod-usgw1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-region: ${{ vars.AWS_REGION }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    
+    - name: update kubeconfig - ${{ vars.AWS_WEB_CLUSTER_NAME }}
+      run: aws eks --region ${{ vars.AWS_REGION }} update-kubeconfig --name ${{ vars.AWS_WEB_CLUSTER_NAME }}
+
+    - name: Get EKS endpoints & CA
+      run: |
+        # Python AI Cluster
+        PYTHON_AI_EKS_ENDPOINT=$(aws eks describe-cluster --name ${{ vars.AWS_PYTHON_AI_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }} --query "cluster.endpoint" --output text)
+        PYTHON_AI_CA=$(aws eks describe-cluster --name ${{ vars.AWS_PYTHON_AI_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }} --output=text --query 'cluster.{certificateAuthorityData: certificateAuthority.data}')
+
+        echo PYTHON_AI_EKS_ENDPOINT=$PYTHON_AI_EKS_ENDPOINT >> $GITHUB_ENV
+        echo PYTHON_AI_CA=$PYTHON_AI_CA >> $GITHUB_ENV
+
+    - name: create temporary file
+      run: |
+        cat << EOF > /tmp/values.yaml
+        configs:
+          cm:
+            dex.config: |
+              logger:
+                level: warn
+                format: json
+              connectors:
+              - type: saml
+                id: aws
+                name: "AWS IAM Identity Center"
+                config:
+                  ssoURL: "${{ secrets.EXAMPLE_SAML_ASSERTION_URL }}"
+                  caData: "${{ secrets.EXAMPLE_ARGOCD_APP_CA_DATA }}"
+                  entityIssuer: 'https://${{ vars.ARGOCD_URL }}/api/dex/callback'
+                  redirectURI: 'https://${{ vars.ARGOCD_URL }}/api/dex/callback'
+                  usernameAttr: email
+                  emailAttr: email
+                  groupsAttr: groups
+        EOF
+
+    - name: Install Argo CD
+      run: |
+        helm repo add argo https://argoproj.github.io/argo-helm
+        helm repo update
+        helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace -f ./regions/${{ vars.AWS_REGION }}/environments/${{ vars.ENVIRONMENT }}/argocd/values.yaml -f /tmp/values.yaml \
+        --set configs.repositories.argocd.url="https://github.com/gatmbarz123/AWS-Project.git" \
+        --set configs.credentialTemplates.argocd.url="https://github.com/gatmbarz123/AWS-Project.git" \
+        --set configs.credentialTemplates.argocd.username="argocd" \
+        --set configs.credentialTemplates.argocd.password="${{ secrets.EXAMPLE_ARGOCD_READONLY_TOKEN }}" \
+        --set configs.repositories.helm-charts.url="https://github.com/gatmbarz123/AWS-Project.git" \
+        --set configs.credentialTemplates.helm-charts.url="https://github.com/gatmbarz123/AWS-Project.git" \
+        --set configs.credentialTemplates.helm-charts.username="helm" \
+        --set configs.credentialTemplates.helm-charts.password="${{ secrets.EXAMPLE_HELM_CHART_READONLY_TOKEN }}" \
+        --set configs.clusterCredentials.python-ai.server=${PYTHON_AI_EKS_ENDPOINT} \
+        --set configs.clusterCredentials.python-ai.config.tlsClientConfig.caData="${PYTHON_AI_CA}"

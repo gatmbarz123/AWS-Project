@@ -1,0 +1,7 @@
+settings:
+  clusterName: "prod-use1-python-ai-eks"
+  clusterEndpoint: "https://6B123456789012F8294885579293106C.gr7.us-east-1.eks.amazonaws.com"
+  interruptionQueue: "Karpenter-prod-use1-python-ai-eks"
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/KarpenterController-20260209104504529400000012"
